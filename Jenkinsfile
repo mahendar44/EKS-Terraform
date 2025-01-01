@@ -51,7 +51,7 @@ pipeline {
             steps {
                 dir(TERRAFORM_DIR) {
                     // Apply the Terraform plan with auto-approve
-                    sh 'terraform apply -input=false --auto-approve'
+                    sh 'terraform destroy -input=false --auto-approve'
                 }
             }
         }
