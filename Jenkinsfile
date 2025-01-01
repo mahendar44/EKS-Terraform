@@ -2,20 +2,20 @@ pipeline {
     agent any
 
     environment {
-        TERRAFORM_DIR = './Terraform' // Path to your Terraform configuration
+        TERRAFORM_DIR = './Terraform' // Path to your Terraform files
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                // Clone the repository containing the Terraform configuration
+                // Pull the repository containing the Terraform files
                 checkout scm
             }
         }
 
         stage('Setup Environment') {
             steps {
-                // Use Jenkins credentials for AWS keys
+                // Export AWS credentials and default region from Jenkins secrets
                 withCredentials([
                     string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
@@ -23,6 +23,7 @@ pipeline {
                     sh '''
                     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
                     export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                    echo "AWS environment variables exported."
                     '''
                 }
             }
@@ -31,6 +32,7 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 dir(TERRAFORM_DIR) {
+                    // Initialize Terraform
                     sh 'terraform init'
                 }
             }
@@ -39,7 +41,8 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 dir(TERRAFORM_DIR) {
-                    sh 'terraform plan -out=tfplan'
+                    // Run Terraform plan and save the output to a file
+                    sh 'terraform plan -var-file=terraform.tfvars -out=tfplan'
                 }
             }
         }
@@ -47,7 +50,8 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 dir(TERRAFORM_DIR) {
-                    sh 'terraform apply -input=false tfplan'
+                    // Apply the Terraform plan with auto-approve
+                    sh 'terraform apply -input=false --auto-approve'
                 }
             }
         }
@@ -55,13 +59,13 @@ pipeline {
 
     post {
         always {
-            cleanWs() // Clean up workspace after the build
-        }
-        failure {
-            echo 'Pipeline failed!'
+            cleanWs() // Clean workspace after pipeline completion
         }
         success {
-            echo 'Infrastructure created successfully!'
+            echo 'Terraform infrastructure created successfully.'
+        }
+        failure {
+            echo 'Pipeline failed.'
         }
     }
 }
