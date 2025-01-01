@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block = var.vpc_cidr_block
   enable_dns_support = true
   enable_dns_hostnames = true
   tags = {
@@ -13,8 +13,8 @@ resource "aws_vpc" "main" {
 
 resource "aws_subnet" "subnet_a" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
+  cidr_block              = var.subnet_a_cidr_block
+  availability_zone       = var.subnet_a_az
   map_public_ip_on_launch = true
   tags = {
     Name = "subnet-a"
@@ -23,8 +23,8 @@ resource "aws_subnet" "subnet_a" {
 
 resource "aws_subnet" "subnet_b" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
+  cidr_block              = var.subnet_b_cidr_block
+  availability_zone       = var.subnet_b_az
   map_public_ip_on_launch = true
   tags = {
     Name = "subnet-b"
@@ -71,12 +71,17 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_role_policy" {
 resource "aws_eks_cluster" "main" {
   name     = "my-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
+
   vpc_config {
     subnet_ids = [
       aws_subnet.subnet_a.id,
       aws_subnet.subnet_b.id
     ]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_role_policy
+  ]
 }
 
 resource "aws_iam_role" "node_group_role" {
@@ -119,8 +124,6 @@ resource "aws_iam_role_policy_attachment" "node_group_role_policy" {
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "my-node-group"
-
-  # Corrected to use node_role_arn
   node_role_arn   = aws_iam_role.node_group_role.arn
 
   subnet_ids = [
@@ -129,11 +132,36 @@ resource "aws_eks_node_group" "main" {
   ]
 
   scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
+    desired_size = var.node_group_desired_size
+    max_size     = var.node_group_max_size
+    min_size     = var.node_group_min_size
   }
 
-  instance_types = ["t3.medium"]
+  instance_types = var.node_group_instance_types
+
+  ami_type = "AL2_x86_64"
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_group_role_policy
+  ]
 }
 
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "eks_cluster_name" {
+  value = aws_eks_cluster.main.name
+}
+
+output "eks_cluster_endpoint" {
+  value = aws_eks_cluster.main.endpoint
+}
+
+output "eks_cluster_arn" {
+  value = aws_eks_cluster.main.arn
+}
+
+output "node_group_name" {
+  value = aws_eks_node_group.main.node_group_name
+}
