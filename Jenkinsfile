@@ -28,77 +28,26 @@ pipeline {
             }
         }
 
-        stage('Initialize Terraform') {
+        stage('Terraform Init') {
             steps {
                 dir(TERRAFORM_DIR) {
-                    // Initialize Terraform
                     sh 'terraform init'
                 }
             }
         }
 
-        stage('Check Infrastructure') {
+        stage('Terraform Plan') {
             steps {
                 dir(TERRAFORM_DIR) {
-                    script {
-                        // Check if the infrastructure already exists
-                        def infraExists = sh(
-                            script: 'terraform show -json | jq ".values.root_module.resources | length > 0"',
-                            returnStatus: true
-                        ) == 0
-
-                        if (infraExists) {
-                            echo "Infrastructure already exists. Moving to the next stage."
-                        } else {
-                            echo "No existing infrastructure. Proceeding to create it."
-                        }
-                    }
+                    sh 'terraform plan -out=tfplan'
                 }
             }
         }
 
-        stage('Plan Terraform') {
+        stage('Terraform Apply') {
             steps {
                 dir(TERRAFORM_DIR) {
-                    script {
-                        def infraExists = sh(
-                            script: 'terraform show -json | jq ".values.root_module.resources | length > 0"',
-                            returnStatus: true
-                        ) == 0
-
-                        if (!infraExists) {
-                            sh 'terraform plan -out=tfplan'
-                        } else {
-                            echo "Skipping Terraform Plan as infrastructure already exists."
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Apply Terraform') {
-            steps {
-                dir(TERRAFORM_DIR) {
-                    script {
-                        def infraExists = sh(
-                            script: 'terraform show -json | jq ".values.root_module.resources | length > 0"',
-                            returnStatus: true
-                        ) == 0
-
-                        if (!infraExists) {
-                            sh 'terraform apply -input=false tfplan'
-                        } else {
-                            echo "Skipping Terraform Apply as infrastructure already exists."
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Post-Process') {
-            steps {
-                dir(TERRAFORM_DIR) {
-                    echo "Performing post-apply actions."
+                    sh 'terraform apply -input=false tfplan'
                 }
             }
         }
@@ -106,15 +55,13 @@ pipeline {
 
     post {
         always {
-            // Clean up sensitive information
-            cleanWs()
+            cleanWs() // Clean up workspace after the build
         }
         failure {
             echo 'Pipeline failed!'
         }
         success {
-            echo 'Pipeline completed successfully!'
+            echo 'Infrastructure created successfully!'
         }
     }
 }
-
