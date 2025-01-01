@@ -1,5 +1,13 @@
 pipeline {
     agent any
+    environment {
+        AWS_ACCESS_KEY_ID     = aws-access-key-id
+        AWS_SECRET_ACCESS_KEY = aws-secret-access-key
+        AWS_DEFAULT_REGION    = 'us-east-1'  // Set your AWS region
+    }
+
+
+    
     stages {
         stage('Terraform Init') {
             steps {
