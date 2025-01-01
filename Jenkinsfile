@@ -1,62 +1,67 @@
 pipeline {
     agent any
+
     environment {
-        AWS_ACCESS_KEY_ID     = 'aws-access-key-id'
-        AWS_SECRET_ACCESS_KEY = 'aws-secret-access-key'
-        AWS_DEFAULT_REGION    = 'us-east-1'  // Set your AWS region
+        // Specify the directory where Terraform will run
+        TERRAFORM_DIR = './terraform'
     }
 
-
-    
     stages {
-        stage('Terraform Init') {
+        stage('Checkout Code') {
             steps {
-                script {
-                    echo 'Running terraform init...'
-                    sh 'terraform init'  // Initializes Terraform working directory
+                // Clone the repository containing the Terraform configuration
+                checkout scm
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                // Use Jenkins credentials for AWS keys
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    // Export AWS credentials as environment variables
+                    sh '''
+                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                    '''
                 }
             }
         }
 
-        stage('Terraform Plan') {
+        stage('Initialize Terraform') {
             steps {
-                script {
-                    echo 'Running terraform plan...'
-                    // Run terraform plan and capture the result
-                    def planResult = sh(script: 'terraform plan -detailed-exitcode', returnStatus: true)
-                    if (planResult == 0) {
-                        echo 'No changes required. Skipping apply.'
-                    } else if (planResult == 2) {
-                        echo 'Changes detected, proceeding to apply.'
-                    } else {
-                        error 'Error in terraform plan.'
-                    }
+                dir(TERRAFORM_DIR) {
+                    // Initialize Terraform
+                    sh 'terraform init'
                 }
             }
         }
 
-        stage('Terraform Apply') {
-            when {
-                expression {
-                    // Only apply if terraform plan showed changes (exit code 2)
-                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
-                }
-            }
+        stage('Plan Terraform') {
             steps {
-                script {
-                    echo 'Running terraform apply...'
-                    // Applying the changes to create the infrastructure
-                    sh 'terraform apply -auto-approve'
+                dir(TERRAFORM_DIR) {
+                    // Plan Terraform changes
+                    sh 'terraform plan -out=tfplan'
                 }
             }
         }
 
-        stage('Terraform Destroy') {
+        stage('Apply Terraform') {
             steps {
-                script {
-                    echo 'Running terraform destroy...'
-                    // Destroys the infrastructure without confirmation
-                    sh 'terraform destroy -auto-approve'
+                dir(TERRAFORM_DIR) {
+                    // Apply Terraform changes
+                    sh 'terraform apply -input=false tfplan'
+                }
+            }
+        }
+
+        stage('Post-Apply') {
+            steps {
+                dir(TERRAFORM_DIR) {
+                    // Optionally output the Terraform state or resources
+                    sh 'terraform output'
                 }
             }
         }
@@ -64,14 +69,14 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up...'
-            // Optionally, you can add steps here for things like Terraform state cleanup
-        }
-        success {
-            echo 'Pipeline ran successfully!'
+            // Clean up sensitive information
+            cleanWs()
         }
         failure {
-            echo 'Pipeline failed. Please check the logs.'
+            echo 'Pipeline failed!'
+        }
+        success {
+            echo 'Infrastructure created successfully!'
         }
     }
 }
