@@ -1,55 +1,54 @@
 pipeline {
     agent any
-
     stages {
-        stage('Checkout') {
-            steps {
-                // Checkout the source code from SCM (e.g., Git)
-                checkout scm
-            }
-        }
-
-        stage('Initialize Terraform') {
+        stage('Terraform Init') {
             steps {
                 script {
-                    // Initialize Terraform (downloads necessary providers and modules)
-                    sh 'terraform init'
+                    echo 'Running terraform init...'
+                    sh 'terraform init'  // Initializes Terraform working directory
                 }
             }
         }
 
-        stage('Plan Infrastructure') {
+        stage('Terraform Plan') {
             steps {
                 script {
-                    // Run terraform plan to preview the changes before applying them
-                    sh 'terraform plan -out=tfplan'
+                    echo 'Running terraform plan...'
+                    // Run terraform plan and capture the result
+                    def planResult = sh(script: 'terraform plan -detailed-exitcode', returnStatus: true)
+                    if (planResult == 0) {
+                        echo 'No changes required. Skipping apply.'
+                    } else if (planResult == 2) {
+                        echo 'Changes detected, proceeding to apply.'
+                    } else {
+                        error 'Error in terraform plan.'
+                    }
                 }
             }
         }
 
-        stage('Apply Infrastructure') {
+        stage('Terraform Apply') {
+            when {
+                expression {
+                    // Only apply if terraform plan showed changes (exit code 2)
+                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
             steps {
                 script {
-                    // Apply the Terraform plan to create the infrastructure
-                    sh 'terraform apply -auto-approve tfplan'
+                    echo 'Running terraform apply...'
+                    // Applying the changes to create the infrastructure
+                    sh 'terraform apply -auto-approve'
                 }
             }
         }
 
-        stage('Verify Infrastructure') {
+        stage('Terraform Destroy') {
             steps {
                 script {
-                    // Optional: Run any verification commands, like Terraform output or API checks
-                    sh 'terraform output'
-                }
-            }
-        }
-
-        stage('Cleanup') {
-            steps {
-                script {
-                    // Optional: Clean up any temporary files or directories
-                    sh 'rm -rf .terraform tfplan'
+                    echo 'Running terraform destroy...'
+                    // Destroys the infrastructure without confirmation
+                    sh 'terraform destroy -auto-approve'
                 }
             }
         }
@@ -57,20 +56,14 @@ pipeline {
 
     post {
         always {
-            // Always clean up resources or handle any post-build actions
             echo 'Cleaning up...'
-            // Add any cleanup logic here if necessary
+            // Optionally, you can add steps here for things like Terraform state cleanup
         }
-        
         success {
-            // Handle success (e.g., notify a user or send an email)
-            echo 'Infrastructure has been successfully created.'
+            echo 'Pipeline ran successfully!'
         }
-
         failure {
-            // Handle failure (e.g., notify a user or send an email)
-            echo 'There was an error creating the infrastructure.'
+            echo 'Pipeline failed. Please check the logs.'
         }
     }
 }
-
