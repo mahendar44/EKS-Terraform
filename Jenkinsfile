@@ -17,8 +17,8 @@ pipeline {
             steps {
                 // Use Jenkins credentials for AWS keys
                 withCredentials([
-                    string(credentialsId: 'access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh '''
                     export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
