@@ -47,11 +47,20 @@ pipeline {
             }
         }
 
+        stage('Terraform Destroy') {
+            steps {
+                dir(TERRAFORM_DIR) {
+                    // Destroy the Terraform infrastructure
+                    sh 'terraform destroy -input=false --auto-approve'
+                }
+            }
+        }
+
         stage('Terraform Apply') {
             steps {
                 dir(TERRAFORM_DIR) {
                     // Apply the Terraform plan with auto-approve
-                    sh 'terraform destroy -input=false --auto-approve'
+                    sh 'terraform apply -input=false --auto-approve'
                 }
             }
         }
